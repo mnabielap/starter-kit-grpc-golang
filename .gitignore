@@ -20,7 +20,8 @@ vendor/
 *.log
 
 **/__pycache__
-**api_tests/*.json
+**api_tests/grpc/*.json
+**api_tests/restapi/*.json
 
 *.db
 *.sqlite
