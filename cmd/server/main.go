@@ -71,7 +71,7 @@ func main() {
 		grpc.ChainUnaryInterceptor(
 			interceptor.RecoveryInterceptor(),
 			interceptor.LoggerInterceptor(),
-			interceptor.RateLimitInterceptor(),
+			// interceptor.RateLimitInterceptor(), // --> Uncomment for using RateLimiter
 			interceptor.AuthInterceptor(cfg),
 		),
 	)
