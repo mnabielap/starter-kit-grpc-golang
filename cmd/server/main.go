@@ -18,7 +18,7 @@ import (
 	"starter-kit-grpc-golang/internal/repository"
 	"starter-kit-grpc-golang/internal/service"
 	"starter-kit-grpc-golang/pkg/logger"
-	"starter-kit-grpc-golang/pkg/swagger" // <--- Import the new package
+	"starter-kit-grpc-golang/pkg/swagger"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
