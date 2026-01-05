@@ -18,6 +18,7 @@ import (
 	"starter-kit-grpc-golang/internal/repository"
 	"starter-kit-grpc-golang/internal/service"
 	"starter-kit-grpc-golang/pkg/logger"
+	"starter-kit-grpc-golang/pkg/swagger" // <--- Import the new package
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -32,51 +33,40 @@ func HttpResponseModifier(ctx context.Context, w http.ResponseWriter, p proto.Me
 	if !ok {
 		return nil
 	}
-
-	// Check if the handler set the "x-http-code" header
 	if vals := md.HeaderMD.Get("x-http-code"); len(vals) > 0 {
 		code, err := strconv.Atoi(vals[0])
 		if err == nil {
-			// Delete the header so it doesn't appear in the HTTP response headers
 			delete(md.HeaderMD, "x-http-code")
 			w.Header().Del("Grpc-Metadata-X-Http-Code")
-			
-			// Set the status code (e.g., 201, 204)
 			w.WriteHeader(code)
 		}
 	}
-
 	return nil
 }
 
 func main() {
-	// 1. Load Configuration & Logger
+	// 1. Load Config & Logger
 	cfg := config.LoadConfig()
 	logger.InitLogger(cfg.Env)
 	logger.Log.Info("Starting server...", "env", cfg.Env)
 
-	// 2. Connect to Database
+	// 2. Connect DB
 	config.ConnectDB(cfg)
 
-	// 3. Dependency Injection (Repository -> Service -> Handler)
-	
-	// Repositories
+	// 3. Dependency Injection
 	userRepo := repository.NewUserRepository(config.DB)
 	tokenRepo := repository.NewTokenRepository(config.DB)
 
-	// Services
 	tokenService := service.NewTokenService(tokenRepo, cfg)
 	emailService := service.NewEmailService(cfg)
 	userService := service.NewUserService(userRepo)
 	authService := service.NewAuthService(userRepo, tokenRepo, tokenService, emailService, cfg)
 
-	// Handlers (Controllers)
 	authHandler := grpc_handler.NewAuthHandler(authService)
 	userHandler := grpc_handler.NewUserHandler(userService)
 	healthHandler := grpc_handler.NewHealthHandler()
 
-	// 4. Setup gRPC Server with Interceptors
-	// Chain order: Recovery -> Logger -> RateLimit -> Auth -> Handler
+	// 4. Setup gRPC Server
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			interceptor.RecoveryInterceptor(),
@@ -86,22 +76,18 @@ func main() {
 		),
 	)
 
-	// Register Proto Services
 	pb.RegisterAuthServiceServer(grpcServer, authHandler)
 	pb.RegisterUserServiceServer(grpcServer, userHandler)
 	pb.RegisterHealthServiceServer(grpcServer, healthHandler)
 
-	// Enable Reflection (Useful for testing with Postman/grpcurl)
 	if cfg.Env == "development" {
 		reflection.Register(grpcServer)
 	}
 
-	// 5. Start Servers (gRPC & HTTP Gateway)
-	
-	// Channel to listen for errors
+	// 5. Start Servers
 	errChan := make(chan error, 1)
 
-	// --- Run gRPC Server ---
+	// --- gRPC Server ---
 	go func() {
 		listener, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 		if err != nil {
@@ -114,47 +100,50 @@ func main() {
 		}
 	}()
 
-	// --- Run HTTP Gateway Server ---
+	// --- HTTP Gateway & Swagger ---
 	go func() {
-		// Wait a moment for gRPC to start
 		time.Sleep(time.Second)
 
 		ctx := context.Background()
 		
-		mux := runtime.NewServeMux(
+		// Create the gRPC-Gateway Mux
+		gwmux := runtime.NewServeMux(
 			runtime.WithForwardResponseOption(HttpResponseModifier),
 		)
 		
-		// Dial options to connect to local gRPC server
 		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		}
 		grpcEndpoint := "localhost:" + cfg.GRPCPort
 
-		// Register Handlers for Gateway
-		err := pb.RegisterAuthServiceHandlerFromEndpoint(ctx, mux, grpcEndpoint, opts)
-		if err != nil {
-			errChan <- err
-			return
+		// Register Services to Gateway
+		if err := pb.RegisterAuthServiceHandlerFromEndpoint(ctx, gwmux, grpcEndpoint, opts); err != nil {
+			errChan <- err; return
 		}
-		err = pb.RegisterUserServiceHandlerFromEndpoint(ctx, mux, grpcEndpoint, opts)
-		if err != nil {
-			errChan <- err
-			return
+		if err := pb.RegisterUserServiceHandlerFromEndpoint(ctx, gwmux, grpcEndpoint, opts); err != nil {
+			errChan <- err; return
 		}
-		err = pb.RegisterHealthServiceHandlerFromEndpoint(ctx, mux, grpcEndpoint, opts)
-		if err != nil {
-			errChan <- err
-			return
+		if err := pb.RegisterHealthServiceHandlerFromEndpoint(ctx, gwmux, grpcEndpoint, opts); err != nil {
+			errChan <- err; return
 		}
 
-		logger.Log.Info("HTTP Gateway listening", "port", cfg.GatewayPort)
+		// Create a Root Mux to handle both Swagger and Gateway
+		mux := http.NewServeMux()
+		
+		// Mount Gateway (API)
+		mux.Handle("/", gwmux)
+
+		// Mount Swagger
+		mux.HandleFunc("/swagger.json", swagger.ServeJSON)
+		mux.HandleFunc("/swagger-ui", swagger.ServeUI)
+
+		logger.Log.Info("HTTP Gateway & Swagger listening", "port", cfg.GatewayPort)
 		if err := http.ListenAndServe(":"+cfg.GatewayPort, mux); err != nil {
 			errChan <- fmt.Errorf("gateway server error: %v", err)
 		}
 	}()
 
-	// 6. Graceful Shutdown
+	// 6. Shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
