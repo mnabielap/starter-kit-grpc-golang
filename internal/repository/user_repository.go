@@ -46,7 +46,7 @@ func (r *userRepository) FindAll(filters map[string]interface{}, pagination *uti
 
 	query := r.db.Model(&models.User{})
 
-	// --- 1. SEARCH LOGIC (Replicated from REST API) ---
+	// --- 1. SEARCH LOGIC ---
 	if search, ok := filters["search"].(string); ok && search != "" {
 		scope, _ := filters["scope"].(string)
 		searchPattern := "%" + strings.ToLower(search) + "%"
@@ -57,17 +57,22 @@ func (r *userRepository) FindAll(filters map[string]interface{}, pagination *uti
 		case "email":
 			query = query.Where("lower(email) LIKE ?", searchPattern)
 		case "id":
-			// Strict ID search if valid UUID
+			// If searching by ID, exact match is expected
+			// If using UUID, ensure it's valid to avoid DB errors
 			if _, err := uuid.Parse(search); err == nil {
 				query = query.Where("id = ?", search)
 			} else {
-				query = query.Where("1 = 0") // Invalid UUID returns nothing
+				// If scope is ID but invalid format provided, return empty
+				query = query.Where("1 = 0")
 			}
-		default: // "all" or empty
+		case "all":
+			fallthrough
+		default:
 			// OR Logic: Name OR Email OR ID
 			subQuery := r.db.Where("lower(name) LIKE ?", searchPattern).
 				Or("lower(email) LIKE ?", searchPattern)
 
+			// Only append ID check if it looks like a valid UUID
 			if _, err := uuid.Parse(search); err == nil {
 				subQuery = subQuery.Or("id = ?", search)
 			}
@@ -84,12 +89,14 @@ func (r *userRepository) FindAll(filters map[string]interface{}, pagination *uti
 	query.Count(&totalRows)
 
 	// --- 4. SORTING & PAGINATION ---
-	allowedSortFields := map[string]bool{
-		"id":         true,
-		"name":       true,
-		"email":      true,
-		"role":       true,
-		"created_at": true,
+	// Map allowed fields. Support both snake_case (DB/Proto) and camelCase (JSON)
+	allowedSortFields := map[string]string{
+		"id":         "id",
+		"name":       "name",
+		"email":      "email",
+		"role":       "role",
+		"created_at": "created_at",
+		"createdAt":  "created_at",
 	}
 
 	err := query.
