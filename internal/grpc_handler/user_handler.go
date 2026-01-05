@@ -2,13 +2,16 @@ package grpc_handler
 
 import (
 	"context"
+	"strconv"
 
 	pb "starter-kit-grpc-golang/api/gen/v1"
 	"starter-kit-grpc-golang/internal/interceptor"
 	"starter-kit-grpc-golang/internal/models"
 	"starter-kit-grpc-golang/internal/service"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -45,6 +48,9 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	// SET 201 CREATED
+	grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(201)))
 
 	return convertUserToProto(user), nil
 }
@@ -130,6 +136,9 @@ func (h *UserHandler) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest)
 	if err := h.service.DeleteUser(req.Id); err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
+
+	// SET 204 NO CONTENT
+	grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(204)))
 
 	return &pb.DeleteUserResponse{Success: true}, nil
 }

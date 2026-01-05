@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -22,7 +23,31 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/proto"
 )
+
+// HttpResponseModifier checks for a specific metadata key to change the HTTP Status Code
+func HttpResponseModifier(ctx context.Context, w http.ResponseWriter, p proto.Message) error {
+	md, ok := runtime.ServerMetadataFromContext(ctx)
+	if !ok {
+		return nil
+	}
+
+	// Check if the handler set the "x-http-code" header
+	if vals := md.HeaderMD.Get("x-http-code"); len(vals) > 0 {
+		code, err := strconv.Atoi(vals[0])
+		if err == nil {
+			// Delete the header so it doesn't appear in the HTTP response headers
+			delete(md.HeaderMD, "x-http-code")
+			w.Header().Del("Grpc-Metadata-X-Http-Code")
+			
+			// Set the status code (e.g., 201, 204)
+			w.WriteHeader(code)
+		}
+	}
+
+	return nil
+}
 
 func main() {
 	// 1. Load Configuration & Logger
@@ -95,7 +120,10 @@ func main() {
 		time.Sleep(time.Second)
 
 		ctx := context.Background()
-		mux := runtime.NewServeMux()
+		
+		mux := runtime.NewServeMux(
+			runtime.WithForwardResponseOption(HttpResponseModifier),
+		)
 		
 		// Dial options to connect to local gRPC server
 		opts := []grpc.DialOption{

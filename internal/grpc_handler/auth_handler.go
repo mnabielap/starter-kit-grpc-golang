@@ -2,13 +2,16 @@ package grpc_handler
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	pb "starter-kit-grpc-golang/api/gen/v1"
 	"starter-kit-grpc-golang/internal/interceptor"
 	"starter-kit-grpc-golang/internal/service"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -26,6 +29,9 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	// SET 201 CREATED
+	grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(201)))
 
 	return &pb.AuthResponse{
 		User:   convertUserToProto(user),
@@ -50,6 +56,10 @@ func (h *AuthHandler) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.Lo
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "invalid token")
 	}
+
+	// SET 204 NO CONTENT
+	grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(204)))
+
 	return &pb.LogoutResponse{Success: true}, nil
 }
 
