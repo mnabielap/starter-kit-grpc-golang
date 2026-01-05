@@ -1,0 +1,23 @@
+# Binaries
+main
+*.exe
+*.dll
+
+# Environment
+.env
+
+# Dependencies
+vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+**/__pycache__
+**api_tests/*.json

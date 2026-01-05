@@ -1,0 +1,22 @@
+version: v1
+plugins:
+  # Generate Go structs from Proto
+  - plugin: go
+    out: api/gen
+    opt: paths=source_relative
+  
+  # Generate gRPC service definitions
+  - plugin: go-grpc
+    out: api/gen
+    opt: paths=source_relative
+
+  # Generate Reverse Proxy (gRPC Gateway)
+  - plugin: grpc-gateway
+    out: api/gen
+    opt:
+      - paths=source_relative
+      - generate_unbound_methods=true
+
+  # Generate Swagger/OpenAPI docs
+  - plugin: openapiv2
+    out: api/openapi
