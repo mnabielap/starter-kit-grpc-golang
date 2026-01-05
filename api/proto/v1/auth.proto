@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package v1;
+
+import "google/api/annotations.proto";
+import "api/proto/v1/user.proto"; // Import UserResponse
+
+option go_package = "starter-kit-grpc-golang/api/gen/v1;v1";
+
+service AuthService {
+  // Register a new user
+  rpc Register(RegisterRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/register"
+      body: "*"
+    };
+  }
+
+  // Login
+  rpc Login(LoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // Logout (Invalidate refresh token)
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout"
+      body: "*"
+    };
+  }
+
+  // Refresh Tokens
+  rpc RefreshToken(RefreshTokenRequest) returns (TokenPair) {
+    option (google.api.http) = {
+      post: "/v1/auth/refresh-tokens"
+      body: "*"
+    };
+  }
+
+  // Forgot Password (Send email)
+  rpc ForgotPassword(ForgotPasswordRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/forgot-password"
+      body: "*"
+    };
+  }
+
+  // Reset Password (Use token from email)
+  rpc ResetPassword(ResetPasswordRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/reset-password"
+      body: "*"
+    };
+  }
+
+  // Send Verification Email (Authenticated user)
+  rpc SendVerificationEmail(Empty) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/send-verification-email"
+      body: "*"
+    };
+  }
+
+  // Verify Email (Use token from email)
+  rpc VerifyEmail(VerifyEmailRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/verify-email"
+      body: "*"
+    };
+  }
+}
+
+// --- Messages ---
+
+message Empty {}
+
+message SuccessResponse {
+  string message = 1;
+}
+
+message RegisterRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message TokenPair {
+  message TokenDetail {
+    string token = 1;
+    string expires = 2; // ISO String or Timestamp
+  }
+  TokenDetail access = 1;
+  TokenDetail refresh = 2;
+}
+
+message AuthResponse {
+  UserResponse user = 1;
+  TokenPair tokens = 2;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message ResetPasswordRequest {
+  string token = 1; // From query param in REST, usually moved to body or query field in gRPC
+  string password = 2;
+}
+
+message VerifyEmailRequest {
+  string token = 1;
+}
